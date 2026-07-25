@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Authentication Card Generator</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f2f2f2;
+        margin: 20px;
+        color: #111;
+    }
+
+    h1 {
+        margin-bottom: 5px;
+    }
+
+    .controls {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    label {
+        font-weight: bold;
+    }
+
+    input {
+        padding: 8px;
+        margin: 5px 10px 10px 0;
+    }
+
+    button {
+        padding: 10px 18px;
+        cursor: pointer;
+        border: none;
+        border-radius: 5px;
+        background: #222;
+        color: white;
+        font-weight: bold;
+    }
+
+    button:hover {
+        background: #444;
+    }
+
+    #cards {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+
+    .card {
+        background: white;
+        border: 2px solid #000;
+        padding: 12px;
+        page-break-inside: avoid;
+    }
+
+    .card-title {
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .warning {
+        text-align: center;
+        font-size: 11px;
+        margin-top: 10px;
+    }
+
+    table {
+        border-collapse: collapse;
+        margin: auto;
+    }
+
+    th, td {
+        border: 1px solid #000;
+        width: 24px;
+        height: 24px;
+        text-align: center;
+        font-size: 14px;
+        padding: 2px;
+    }
+
+    th {
+        background: #ddd;
+    }
+
+    @media print {
+        body {
+            background: white;
+            margin: 0;
+        }
+
+        .controls {
+            display: none;
+        }
+
+        #cards {
+            gap: 10px;
+        }
+
+        .card {
+            break-inside: avoid;
+        }
+    }
+</style>
+</head>
+<body>
+
+<h1>Authentication Card Generator</h1>
+<p>Offline printable radio authentication lookup cards.</p>
+
+<div class="controls">
+    <label for="seed">Seed:</label>
+    <input type="text" id="seed" value="ghostnet-2026" />
+
+    <label for="count">Tables:</label>
+    <input type="number" id="count" min="1" max="26" value="4" />
+
+    <button onclick="generateCards()">Generate</button>
+    <button onclick="window.print()">Print</button>
+</div>
+
+<div id="cards"></div>
+
+<script>
+const cols = "ABCDEFGHIJKLM".split("");
+const rows = "NOPQRSTUVWXYZ".split("");
+
+const safeChars = "ABCDEFGHJKLMNPQRSTUVWXYZ2346789";
+
+const phonetic = [
+    "Alpha","Bravo","Charlie","Delta","Echo","Foxtrot",
+    "Golf","Hotel","India","Juliett","Kilo","Lima",
+    "Mike","November","Oscar","Papa","Quebec","Romeo",
+    "Sierra","Tango","Uniform","Victor","Whiskey",
+    "Xray","Yankee","Zulu"
+];
+
+function xmur3(str) {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) {
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+        h = (h << 13) | (h >>> 19);
+    }
+    return function() {
+        h = Math.imul(h ^ (h >>> 16), 2246822507);
+        h = Math.imul(h ^ (h >>> 13), 3266489909);
+        return (h ^= h >>> 16) >>> 0;
+    };
+}
+
+function mulberry32(a) {
+    return function() {
+        let t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+}
+
+function seededRandom(seedString) {
+    const seed = xmur3(seedString)();
+    return mulberry32(seed);
+}
+
+function generateCharacter(rng) {
+    return safeChars[Math.floor(rng() * safeChars.length)];
+}
+
+function createTable(seed, name) {
+    const rng = seededRandom(seed + "-" + name);
+
+    let html = `
+        <div class="card">
+            <div class="card-title">${name}</div>
+
+            <table>
+                <tr>
+                    <th></th>
+    `;
+
+    cols.forEach(c => {
+        html += `<th>${c}</th>`;
+    });
+
+    html += `</tr>`;
+
+    rows.forEach(r => {
+        html += `<tr><th>${r}</th>`;
+
+        cols.forEach(c => {
+            html += `<td>${generateCharacter(rng)}</td>`;
+        });
+
+        html += `</tr>`;
+    });
+
+    html += `
+            </table>
+
+            <div class="warning">
+                Destroy if compromised
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+function generateCards() {
+    const seed = document.getElementById("seed").value.trim();
+    const count = parseInt(document.getElementById("count").value);
+
+    const cardsDiv = document.getElementById("cards");
+    cardsDiv.innerHTML = "";
+
+    for (let i = 0; i < count; i++) {
+        const name = phonetic[i] || `Table-${i+1}`;
+        cardsDiv.innerHTML += createTable(seed, name);
+    }
+}
+
+generateCards();
+</script>
+
+</body>
+</html>
